@@ -6,12 +6,8 @@ const {
     makeCacheableSignalKeyStore
 } = require("@whiskeysockets/baileys");
 const pino = require("pino");
-const readline = require("readline");
 const ytSearch = require("yt-search");
 const ytdl = require("ytdl-core");
-
-const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-const question = (text) => new Promise((resolve) => rl.question(text, resolve));
 
 async function startBot() {
     const { state, saveCreds } = await useMultiFileAuthState("auth_info_baileys");
@@ -28,19 +24,19 @@ async function startBot() {
     });
 
     if (!sock.authState.creds.registered) {
-        let phoneNumber = process.env.PHONE_NUMBER;
-        if (!phoneNumber) {
-            phoneNumber = await question("المرجو إدخال رقم الواتساب مع رمز الدولة (مثلاً 212600000000): ");
-        }
-        phoneNumber = phoneNumber.replace(/[^0-9]/g, "");
+        const phoneNumber = "212601219867";
         
         setTimeout(async () => {
-            let code = await sock.requestPairingCode(phoneNumber);
-            code = code?.match(/.{1,4}/g)?.join("-") || code;
-            console.log(`\n================================`);
-            console.log(`🔑 كود الربط الخاص بك هو: ${code}`);
-            console.log(`================================\n`);
-        }, 3000);
+            try {
+                let code = await sock.requestPairingCode(phoneNumber);
+                code = code?.match(/.{1,4}/g)?.join("-") || code;
+                console.log(`\n================================`);
+                console.log(`🔑 كود الربط الخاص بك هو: ${code}`);
+                console.log(`================================\n`);
+            } catch (error) {
+                console.error("❌ خطأ أثناء طلب كود الربط:", error);
+            }
+        }, 4000);
     }
 
     sock.ev.on("creds.update", saveCreds);
