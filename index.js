@@ -11,8 +11,11 @@ const ytdl = require("@distube/ytdl-core");
 const fs = require('fs');
 
 async function startBot() {
-    // إيلا بغيتي تحذف الجلسة القديمة يدوياً إيلا كرت المشكل، حيد الشرح على السطر لتحت:
-    // if (fs.existsSync('./auth_info_baileys')) { fs.rmSync('./auth_info_baileys', { recursive: true, force: true }); }
+    // مسح الجلسة القديمة أوتوماتيكياً عند كل تشغيل لتجنب مشاكل الربط
+    if (fs.existsSync('./auth_info_baileys')) {
+        fs.rmSync('./auth_info_baileys', { recursive: true, force: true });
+        console.log("🧹 تم مسح الجلسة القديمة بنجاح لبدء اتصال نقي.");
+    }
 
     const { state, saveCreds } = await useMultiFileAuthState("auth_info_baileys");
     const { version } = await fetchLatestBaileysVersion();
@@ -25,7 +28,7 @@ async function startBot() {
             creds: state.creds,
             keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "fatal" })),
         },
-        browser: ["Ubuntu", "Chrome", "20.04.0"] // متصفح وهمي باش واتساب يتقبل الاتصال بدون مشاكل
+        browser: ["Ubuntu", "Chrome", "20.04.0"]
     });
 
     sock.ev.on("creds.update", saveCreds);
@@ -37,14 +40,6 @@ async function startBot() {
             const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
             console.log(`انقطع الاتصال (Code: ${statusCode})، جاري إعادة المحاولة...`, shouldReconnect);
             
-            // إيلا طرا تسجل الخروج أو خطأ في الجلسة، نمسحو ملفات الاعتماد باش يطلب كود جديد نقي
-            if (statusCode === DisconnectReason.loggedOut || statusCode === 401) {
-                console.log("⚠️ تم تسجيل الخروج أو الجلسة غير صالحة، جاري مسح ملفات الجلسة القديمة...");
-                if (fs.existsSync('./auth_info_baileys')) {
-                    fs.rmSync('./auth_info_baileys', { recursive: true, force: true });
-                }
-            }
-
             if (shouldReconnect) {
                 setTimeout(startBot, 5000);
             }
@@ -56,7 +51,7 @@ async function startBot() {
     if (!sock.authState.creds.registered) {
         setTimeout(async () => {
             try {
-                const phoneNumber = "212601219867"; // نمرتك
+                const phoneNumber = "212601219867";
                 console.log("⏳ جاري طلب كود الربط من واتساب...");
                 let code = await sock.requestPairingCode(phoneNumber);
                 code = code?.match(/.{1,4}/g)?.join("-") || code;
@@ -66,7 +61,7 @@ async function startBot() {
             } catch (error) {
                 console.error("❌ خطأ أثناء طلب كود الربط:", error);
             }
-        }, 10000); // زيادة الوقت لـ 10 ثواني باش يكون السيرفر استقر مزيان
+        }, 10000);
     }
 
     sock.ev.on("messages.upsert", async ({ messages }) => {
