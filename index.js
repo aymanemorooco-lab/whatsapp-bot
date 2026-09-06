@@ -52,7 +52,7 @@ async function startBot() {
         // ننتظرو 15 ثانية حتى يفتح السوكت تماماً عاد نطلبو الكود
         setTimeout(async () => {
             try {
-                const phoneNumber = "212601219867";
+                const phoneNumber = "212705559693";
                 console.log("⏳ جاري طلب كود الربط من واتساب...");
                 let code = await sock.requestPairingCode(phoneNumber);
                 code = code?.match(/.{1,4}/g)?.join("-") || code;
