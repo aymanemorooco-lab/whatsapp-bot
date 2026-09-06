@@ -61,7 +61,7 @@ async function startBot() {
             } catch (error) {
                 console.error("❌ خطأ أثناء طلب كود الربط:", error);
             }
-        }, 10000);
+        }, 15000);
     }
 
     sock.ev.on("messages.upsert", async ({ messages }) => {
