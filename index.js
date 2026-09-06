@@ -7,7 +7,7 @@ const {
 } = require("@whiskeysockets/baileys");
 const pino = require("pino");
 const ytSearch = require("yt-search");
-const ytdl = require("ytdl-core");
+const ytdl = require("@distube/ytdl-core");
 
 async function startBot() {
     const { state, saveCreds } = await useMultiFileAuthState("auth_info_baileys");
@@ -56,7 +56,7 @@ async function startBot() {
 
     sock.ev.on("messages.upsert", async ({ messages }) => {
         const m = messages[0];
-        if (!m.message || m.key.fromMe) return;
+        if (!m.message) return;
 
         const messageType = Object.keys(m.message)[0];
         const body = messageType === "conversation" ? m.message.conversation :
@@ -65,7 +65,25 @@ async function startBot() {
         const from = m.key.remoteJid;
 
         if (!body) return;
+        const text = body.trim().toLowerCase();
 
+        // 1. أمر القائمة (menu) - خدام بلا نقطة أو بنقطة
+        if (text === "menu" || text === ".menu") {
+            const menuText = `
+🤖 *أهلاً بك في بوت التحميل 24/7* 🤖
+
+الأوامر المتاحة:
+🎵 \`song <اسم الأغنية>\` - للبحث وتحميل الأغاني صوتياً.
+🎥 \`video <رابط يوتيوب / فايسبوك / انستغرام>\` - لتحميل الفيديوهات.
+📋 \`menu\` - لعرض هذه القائمة.
+
+البوت خدام معك مباشرة في الخاص وفي القروبات! 🚀
+            `.trim();
+            await sock.sendMessage(from, { text: menuText });
+            return;
+        }
+
+        // 2. تحميل الأغاني (song)
         if (body.startsWith("song ")) {
             const query = body.slice(5).trim();
             await sock.sendMessage(from, { text: `🔍 جاري البحث عن الأغنية: *${query}*...` });
@@ -87,14 +105,21 @@ async function startBot() {
                 });
             } catch (error) {
                 console.error(error);
-                await sock.sendMessage(from, { text: "❌ حدث خطأ أثناء تحميل الأغنية." });
+                await sock.sendMessage(from, { text: "❌ حدث خطأ أثناء تحميل الملف الصوتي." });
             }
+            return;
         }
 
+        // 3. تحميل الفيديوهات (video - YouTube, Facebook, Instagram)
         if (body.startsWith("video ")) {
             const url = body.slice(6).trim();
-            if (!ytdl.validateURL(url)) {
-                await sock.sendMessage(from, { text: "❌ الرابط غير صالح، المرجو وضع رابط يوتيوب صحيح." });
+            
+            const isYouTube = ytdl.validateURL(url);
+            const isFacebook = url.includes("facebook.com") || url.includes("fb.watch");
+            const isInstagram = url.includes("instagram.com");
+
+            if (!isYouTube && !isFacebook && !isInstagram) {
+                await sock.sendMessage(from, { text: "❌ الرابط غير صالح. يرجى وضع رابط صحيح من (YouTube, Facebook, أو Instagram)." });
                 return;
             }
 
@@ -107,8 +132,9 @@ async function startBot() {
                 });
             } catch (error) {
                 console.error(error);
-                await sock.sendMessage(from, { text: "❌ حدث خطأ أثناء تحميل الفيديو." });
+                await sock.sendMessage(from, { text: "❌ عذراً، تعذر تحميل الفيديو. قد يكون خاصاً أو محميًا." });
             }
+            return;
         }
     });
 }
