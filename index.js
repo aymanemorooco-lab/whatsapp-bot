@@ -8,8 +8,12 @@ const {
 const pino = require("pino");
 const ytSearch = require("yt-search");
 const ytdl = require("@distube/ytdl-core");
+const fs = require('fs');
 
 async function startBot() {
+    // إيلا بغيتي تحذف الجلسة القديمة يدوياً إيلا كرت المشكل، حيد الشرح على السطر لتحت:
+    // if (fs.existsSync('./auth_info_baileys')) { fs.rmSync('./auth_info_baileys', { recursive: true, force: true }); }
+
     const { state, saveCreds } = await useMultiFileAuthState("auth_info_baileys");
     const { version } = await fetchLatestBaileysVersion();
 
@@ -21,6 +25,7 @@ async function startBot() {
             creds: state.creds,
             keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "fatal" })),
         },
+        browser: ["Ubuntu", "Chrome", "20.04.0"] // متصفح وهمي باش واتساب يتقبل الاتصال بدون مشاكل
     });
 
     sock.ev.on("creds.update", saveCreds);
@@ -28,10 +33,20 @@ async function startBot() {
     sock.ev.on("connection.update", async (update) => {
         const { connection, lastDisconnect } = update;
         if (connection === "close") {
-            const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
-            console.log("انقطع الاتصال، جاري إعادة المحاولة...", shouldReconnect);
+            const statusCode = lastDisconnect?.error?.output?.statusCode;
+            const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+            console.log(`انقطع الاتصال (Code: ${statusCode})، جاري إعادة المحاولة...`, shouldReconnect);
+            
+            // إيلا طرا تسجل الخروج أو خطأ في الجلسة، نمسحو ملفات الاعتماد باش يطلب كود جديد نقي
+            if (statusCode === DisconnectReason.loggedOut || statusCode === 401) {
+                console.log("⚠️ تم تسجيل الخروج أو الجلسة غير صالحة، جاري مسح ملفات الجلسة القديمة...");
+                if (fs.existsSync('./auth_info_baileys')) {
+                    fs.rmSync('./auth_info_baileys', { recursive: true, force: true });
+                }
+            }
+
             if (shouldReconnect) {
-                startBot();
+                setTimeout(startBot, 5000);
             }
         } else if (connection === "open") {
             console.log("✅ تم الاتصال بالواتساب بنجاح ويشتغل البوت 24/7!");
@@ -41,7 +56,7 @@ async function startBot() {
     if (!sock.authState.creds.registered) {
         setTimeout(async () => {
             try {
-                const phoneNumber = "212601219867";
+                const phoneNumber = "212601219867"; // نمرتك
                 console.log("⏳ جاري طلب كود الربط من واتساب...");
                 let code = await sock.requestPairingCode(phoneNumber);
                 code = code?.match(/.{1,4}/g)?.join("-") || code;
@@ -51,7 +66,7 @@ async function startBot() {
             } catch (error) {
                 console.error("❌ خطأ أثناء طلب كود الربط:", error);
             }
-        }, 8000);
+        }, 10000); // زيادة الوقت لـ 10 ثواني باش يكون السيرفر استقر مزيان
     }
 
     sock.ev.on("messages.upsert", async ({ messages }) => {
@@ -67,7 +82,6 @@ async function startBot() {
         if (!body) return;
         const text = body.trim().toLowerCase();
 
-        // 1. أمر القائمة (menu) - خدام بلا نقطة أو بنقطة
         if (text === "menu" || text === ".menu") {
             const menuText = `
 🤖 *أهلاً بك في بوت التحميل 24/7* 🤖
@@ -83,7 +97,6 @@ async function startBot() {
             return;
         }
 
-        // 2. تحميل الأغاني (song)
         if (body.startsWith("song ")) {
             const query = body.slice(5).trim();
             await sock.sendMessage(from, { text: `🔍 جاري البحث عن الأغنية: *${query}*...` });
@@ -110,10 +123,8 @@ async function startBot() {
             return;
         }
 
-        // 3. تحميل الفيديوهات (video - YouTube, Facebook, Instagram)
         if (body.startsWith("video ")) {
             const url = body.slice(6).trim();
-            
             const isYouTube = ytdl.validateURL(url);
             const isFacebook = url.includes("facebook.com") || url.includes("fb.watch");
             const isInstagram = url.includes("instagram.com");
@@ -132,7 +143,7 @@ async function startBot() {
                 });
             } catch (error) {
                 console.error(error);
-                await sock.sendMessage(from, { text: "❌ عذراً، تعذر تحميل الفيديو. قد يكون خاصاً أو محميًا." });
+                await sock.sendMessage(from, { text: "❌ عذراً، تعذر تحميل الفيديو." });
             }
             return;
         }
