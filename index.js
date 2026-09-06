@@ -43,7 +43,7 @@ async function startBot() {
                 setTimeout(startBot, 5000);
             }
         } else if (connection === "open") {
-            console.log("✅ تم الاتصال بالواتساب بنجاح ويشتغل البوت 24/7!");
+            console.log("✅ تم الاتصال بالواتساب بنجاح والبوت شغال للجميع 24/7!");
         }
     });
 
@@ -90,16 +90,18 @@ async function startBot() {
             if (text === "menu" || text === ".menu") {
                 const menuText = `
 🤖 *أهلاً بك في بوت التحميل 24/7* 🤖
+البوت متاح لك وللجميع في المجموعات!
 
 الأوامر المتاحة:
 🎵 \`song <اسم الأغنية>\` - للبحث وتحميل الأغاني صوتياً.
-🎥 \`video <رابط يوتيوب / فايسبوك / انستغرام>\` - لتحميل الفيديوهات.
+🎥 \`video <رابط يوتيوب>\` - لتحميل الفيديوهات.
 📋 \`menu\` - لعرض هذه القائمة.
                 `.trim();
                 await sock.sendMessage(from, { text: menuText }, { quoted: m });
                 return;
             }
 
+            // أمر تحميل الأغاني 🎵 (للجميع)
             if (text.startsWith("song ")) {
                 const query = body.slice(5).trim();
                 await sock.sendMessage(from, { text: `🔍 جاري البحث عن الأغنية: *${query}*...` }, { quoted: m });
@@ -114,34 +116,38 @@ async function startBot() {
                     const video = searchResults.videos[0];
                     await sock.sendMessage(from, { text: `🎵 جاري تحميل: *${video.title}*...` }, { quoted: m });
                     
+                    const stream = ytdl(video.url, { filter: 'audioonly', quality: 'highestaudio' });
+                    
                     await sock.sendMessage(from, {
-                        audio: { url: video.url },
+                        audio: stream,
                         mimetype: "audio/mp4",
                         ptt: false
                     }, { quoted: m });
+
                 } catch (error) {
                     console.error(error);
-                    await sock.sendMessage(from, { text: "❌ حدث خطأ أثناء التحميل." }, { quoted: m });
+                    await sock.sendMessage(from, { text: "❌ حدث خطأ أثناء التحميل. جرب أغنية أخرى." }, { quoted: m });
                 }
                 return;
             }
 
+            // أمر تحميل الفيديو 🎥 (للجميع)
             if (text.startsWith("video ")) {
                 const url = body.slice(6).trim();
                 const isYouTube = ytdl.validateURL(url);
-                const isFacebook = url.includes("facebook.com") || url.includes("fb.watch");
-                const isInstagram = url.includes("instagram.com");
-
-                if (!isYouTube && !isFacebook && !isInstagram) {
-                    await sock.sendMessage(from, { text: "❌ الرابط غير صالح. يرجى وضع رابط صحيح من (YouTube, Facebook, أو Instagram)." }, { quoted: m });
+                
+                if (!isYouTube) {
+                    await sock.sendMessage(from, { text: "❌ حالياً أدعم روابط (YouTube) فقط. المرجو وضع رابط يوتيوب صحيح." }, { quoted: m });
                     return;
                 }
 
                 await sock.sendMessage(from, { text: "📥 جاري تحميل الفيديو، انتظر قليلاً..." }, { quoted: m });
 
                 try {
+                    const stream = ytdl(url, { quality: 'highest' });
+                    
                     await sock.sendMessage(from, {
-                        video: { url: url },
+                        video: stream,
                         caption: "🎥 هاهو الفيديو اللي طلبتي!"
                     }, { quoted: m });
                 } catch (error) {
