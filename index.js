@@ -7,7 +7,6 @@ const {
 } = require("@whiskeysockets/baileys");
 const pino = require("pino");
 const ytSearch = require("yt-search");
-const ytdl = require("@distube/ytdl-core");
 const fs = require('fs');
 
 async function startBot() {
@@ -43,7 +42,7 @@ async function startBot() {
                 setTimeout(startBot, 5000);
             }
         } else if (connection === "open") {
-            console.log("✅ البوت متصل و خدام 24/7 في الخاص والجروبات للجميع!");
+            console.log("✅ البوت متصل و خدام 24/7 للجميع في الخاص والجروبات!");
         }
     });
 
@@ -103,7 +102,7 @@ async function startBot() {
 
             if (text.startsWith("song ")) {
                 let query = body.slice(5).trim();
-                await sock.sendMessage(from, { text: `🔍 جاري البحث عن: *${query}*...` }, { quoted: mek });
+                await sock.sendMessage(from, { text: `🔍 جاري البحث عن الأغنية: *${query}*...` }, { quoted: mek });
 
                 try {
                     const searchResults = await ytSearch(query);
@@ -115,45 +114,57 @@ async function startBot() {
                     const video = searchResults.videos[0];
                     await sock.sendMessage(from, { text: `🎵 جاري تحميل: *${video.title}*...` }, { quoted: mek });
                     
-                    // استخراج الصوت بطريقة آمنة تتجاوز الحظر
-                    const stream = ytdl(video.url, { 
-                        filter: 'audioonly', 
-                        quality: 'highestaudio',
-                        highWaterMark: 1 << 25 
-                    });
-                    
+                    // استخدام API خارجي مستقر لجلب الـ audio بدون حظر 429
+                    const apiUrl = `https://delirius-apiv2.vercel.app/download/ytmp3?url=${encodeURIComponent(video.url)}`;
+                    const fetch = (await import('node-fetch')).default || global.fetch;
+                    const res = await fetch(apiUrl);
+                    const json = await res.json();
+
+                    if (!json.status || !json.data.audio) {
+                        await sock.sendMessage(from, { text: "❌ تعذر جلب الأغنية حالياً، جرب لاحقاً." }, { quoted: mek });
+                        return;
+                    }
+
                     await sock.sendMessage(from, { 
-                        audio: stream, 
+                        audio: { url: json.data.audio }, 
                         mimetype: "audio/mp4", 
                         ptt: false 
                     }, { quoted: mek });
 
                 } catch (error) {
-                    console.error("Download Error:", error);
-                    await sock.sendMessage(from, { text: "❌ يوتيوب قام بحظر السيرفر مؤقتاً من التحميل المباشر. جرب أغنية أخرى أو انتظر قليلاً." }, { quoted: mek });
+                    console.error("Song Error:", error);
+                    await sock.sendMessage(from, { text: "❌ حدث خطأ أثناء التحميل." }, { quoted: mek });
                 }
                 return;
             }
 
             if (text.startsWith("video ")) {
                 const url = body.slice(6).trim();
-                
-                if (!ytdl.validateURL(url)) {
-                    await sock.sendMessage(from, { text: "❌ رابط يوتيوب غير صالح." }, { quoted: mek });
+                if (!url.includes("youtube.com") && !url.includes("youtu.be")) {
+                    await sock.sendMessage(from, { text: "❌ يرجى إرسال رابط يوتيوب صالح." }, { quoted: mek });
                     return;
                 }
 
                 await sock.sendMessage(from, { text: "📥 جاري تحميل الفيديو..." }, { quoted: mek });
 
                 try {
-                    const stream = ytdl(url, { 
-                        quality: 'highest',
-                        highWaterMark: 1 << 25 
-                    });
-                    await sock.sendMessage(from, { video: stream, caption: "🎥 هاهو الفيديو!" }, { quoted: mek });
+                    const apiUrl = `https://delirius-apiv2.vercel.app/download/ytmp4?url=${encodeURIComponent(url)}`;
+                    const fetch = (await import('node-fetch')).default || global.fetch;
+                    const res = await fetch(apiUrl);
+                    const json = await res.json();
+
+                    if (!json.status || !json.data.download) {
+                        await sock.sendMessage(from, { text: "❌ تعذر تحميل الفيديو." }, { quoted: mek });
+                        return;
+                    }
+
+                    await sock.sendMessage(from, { 
+                        video: { url: json.data.download }, 
+                        caption: "🎥 هاهو الفيديو!" 
+                    }, { quoted: mek });
                 } catch (error) {
                     console.error("Video Error:", error);
-                    await sock.sendMessage(from, { text: "❌ تعذر تحميل الفيديو بسبب ضغط يوتيوب." }, { quoted: mek });
+                    await sock.sendMessage(from, { text: "❌ حدث خطأ أثناء تحميل الفيديو." }, { quoted: mek });
                 }
                 return;
             }
@@ -165,3 +176,4 @@ async function startBot() {
 }
 
 startBot();
+        
