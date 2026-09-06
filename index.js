@@ -9,7 +9,6 @@ const pino = require("pino");
 const ytSearch = require("yt-search");
 const ytdl = require("@distube/ytdl-core");
 const fs = require('fs');
-const qrcode = require('qrcode-terminal');
 
 async function startBot() {
     if (fs.existsSync('./auth_info_baileys')) {
@@ -23,24 +22,18 @@ async function startBot() {
     const sock = makeWASocket({
         version,
         logger: pino({ level: "silent" }),
-        printQRInTerminal: true,
+        printQRInTerminal: false,
         auth: {
             creds: state.creds,
             keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "fatal" })),
         },
-        browser: ["Ubuntu", "Chrome", "20.04.0"]
+        browser: ["Chrome (Linux)", "Chrome", "120.0.0.0"]
     });
 
     sock.ev.on("creds.update", saveCreds);
 
     sock.ev.on("connection.update", async (update) => {
-        const { connection, lastDisconnect, qr } = update;
-        
-        if (qr) {
-            console.log("\n📌 ها هو QR Code طلع، سكانيه بالواتساب ديالك:\n");
-            qrcode.generate(qr, { small: true });
-        }
-
+        const { connection, lastDisconnect } = update;
         if (connection === "close") {
             const statusCode = lastDisconnect?.error?.output?.statusCode;
             const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
@@ -54,18 +47,29 @@ async function startBot() {
         }
     });
 
-    // معالجة الرسائل المحسنة لتجاوز مشاكل القراءة والرد على الذات
+    if (!sock.authState.creds.registered) {
+        setTimeout(async () => {
+            try {
+                const phoneNumber = "212601219867";
+                console.log("⏳ جاري طلب كود الربط من واتساب...");
+                let code = await sock.requestPairingCode(phoneNumber);
+                code = code?.match(/.{1,4}/g)?.join("-") || code;
+                console.log(`\n================================`);
+                console.log(`🔑 كود الربط الخاص بك هو: ${code}`);
+                console.log(`================================\n`);
+            } catch (error) {
+                console.error("❌ خطأ أثناء طلب كود الربط:", error);
+            }
+        }, 15000);
+    }
+
     sock.ev.on("messages.upsert", async (chatUpdate) => {
         try {
             const m = chatUpdate.messages[0];
             if (!m || !m.message) return;
-
-            // تجاهل رسائل النظام أو الحالة
             if (m.key.remoteJid === 'status@broadcast') return;
 
             const messageType = Object.keys(m.message)[0];
-            
-            // استخراج النص بجميع أنواعه (عادي، مقباس، رسائل طويلة...)
             let body = "";
             if (messageType === "conversation") {
                 body = m.message.conversation;
@@ -81,9 +85,8 @@ async function startBot() {
 
             const from = m.key.remoteJid;
             const text = body.trim().toLowerCase();
-            console.log(`📩 توصلت برسالة من ${from}: ${body}`);
+            console.log(`📩 رسالة من ${from}: ${body}`);
 
-            // أوامر القائمة (Menu)
             if (text === "menu" || text === ".menu") {
                 const menuText = `
 🤖 *أهلاً بك في بوت التحميل 24/7* 🤖
@@ -97,7 +100,6 @@ async function startBot() {
                 return;
             }
 
-            // أوامر الأغاني (Song)
             if (text.startsWith("song ")) {
                 const query = body.slice(5).trim();
                 await sock.sendMessage(from, { text: `🔍 جاري البحث عن الأغنية: *${query}*...` }, { quoted: m });
@@ -118,13 +120,12 @@ async function startBot() {
                         ptt: false
                     }, { quoted: m });
                 } catch (error) {
-                    console.error("Error in song command:", error);
+                    console.error(error);
                     await sock.sendMessage(from, { text: "❌ حدث خطأ أثناء التحميل." }, { quoted: m });
                 }
                 return;
             }
 
-            // أوامر الفيديو (Video)
             if (text.startsWith("video ")) {
                 const url = body.slice(6).trim();
                 const isYouTube = ytdl.validateURL(url);
@@ -144,14 +145,13 @@ async function startBot() {
                         caption: "🎥 هاهو الفيديو اللي طلبتي!"
                     }, { quoted: m });
                 } catch (error) {
-                    console.error("Error in video command:", error);
+                    console.error(error);
                     await sock.sendMessage(from, { text: "❌ عذراً، تعذر تحميل الفيديو." }, { quoted: m });
                 }
                 return;
             }
-
         } catch (err) {
-            console.error("Error processing message:", err);
+            console.error(err);
         }
     });
 }
