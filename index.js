@@ -11,10 +11,10 @@ const ytdl = require("@distube/ytdl-core");
 const fs = require('fs');
 
 async function startBot() {
-    // مسح الجلسة القديمة أوتوماتيكياً عند كل تشغيل لتجنب مشاكل الربط
+    // مسح الجلسة جذرياً عند كل إعادة تشغيل لتفادي أي تضارب
     if (fs.existsSync('./auth_info_baileys')) {
         fs.rmSync('./auth_info_baileys', { recursive: true, force: true });
-        console.log("🧹 تم مسح الجلسة القديمة بنجاح لبدء اتصال نقي.");
+        console.log("🧹 تم مسح الجلسة القديمة بالكامل.");
     }
 
     const { state, saveCreds } = await useMultiFileAuthState("auth_info_baileys");
@@ -28,7 +28,7 @@ async function startBot() {
             creds: state.creds,
             keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "fatal" })),
         },
-        browser: ["Ubuntu", "Chrome", "20.04.0"]
+        browser: ["Chrome (Linux)", "Chrome", "120.0.0.0"] // متصفح محدث ومستقر عند واتساب
     });
 
     sock.ev.on("creds.update", saveCreds);
@@ -49,6 +49,7 @@ async function startBot() {
     });
 
     if (!sock.authState.creds.registered) {
+        // ننتظرو 15 ثانية حتى يفتح السوكت تماماً عاد نطلبو الكود
         setTimeout(async () => {
             try {
                 const phoneNumber = "212601219867";
@@ -85,8 +86,6 @@ async function startBot() {
 🎵 \`song <اسم الأغنية>\` - للبحث وتحميل الأغاني صوتياً.
 🎥 \`video <رابط يوتيوب / فايسبوك / انستغرام>\` - لتحميل الفيديوهات.
 📋 \`menu\` - لعرض هذه القائمة.
-
-البوت خدام معك مباشرة في الخاص وفي القروبات! 🚀
             `.trim();
             await sock.sendMessage(from, { text: menuText });
             return;
@@ -99,7 +98,7 @@ async function startBot() {
             try {
                 const searchResults = await ytSearch(query);
                 if (!searchResults || searchResults.videos.length === 0) {
-                    await sock.sendMessage(from, { text: "❌ لم يتم العثور على نتائج لهذه الأغنية." });
+                    await sock.sendMessage(from, { text: "❌ لم يتم العثور على نتائج." });
                     return;
                 }
 
@@ -113,7 +112,7 @@ async function startBot() {
                 });
             } catch (error) {
                 console.error(error);
-                await sock.sendMessage(from, { text: "❌ حدث خطأ أثناء تحميل الملف الصوتي." });
+                await sock.sendMessage(from, { text: "❌ حدث خطأ أثناء التحميل." });
             }
             return;
         }
