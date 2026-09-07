@@ -44,7 +44,6 @@ async function startBot() {
         } else if (connection === "open") {
             console.log("✅ البوت متصل و خدام 24/7 في الخاص والجروبات للجميع!");
 
-            // طلب كود الربط فوراً وبشكل صحيح بمجرد فتح الاتصال
             if (!sock.authState.creds.registered) {
                 try {
                     const phoneNumber = "212601219867";
@@ -63,6 +62,9 @@ async function startBot() {
 
     sock.ev.on("messages.upsert", async (chatUpdate) => {
         try {
+            // ضروري باش البوت يقرا الميساجات الواردة الجديدة
+            if (chatUpdate.type !== 'notify') return;
+
             const mek = chatUpdate.messages[0];
             if (!mek || !mek.message) return;
             if (mek.key.remoteJid === 'status@broadcast') return;
@@ -127,7 +129,7 @@ async function startBot() {
                         return;
                     }
 
-                    // 1. صيفط التصويرة ديال الأغنية مع العنوان أولاً (إلا كانت متوفرة فـ API)
+                    // 1. صيفط التصويرة ديال الأغنية مع العنوان أولاً
                     let thumbUrl = json.data.image || json.data.thumbnail;
                     if (thumbUrl) {
                         await sock.sendMessage(from, { 
@@ -190,4 +192,4 @@ async function startBot() {
 }
 
 startBot();
-            
+        
