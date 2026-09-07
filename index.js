@@ -127,6 +127,16 @@ async function startBot() {
                         return;
                     }
 
+                    // 1. صيفط التصويرة ديال الأغنية مع العنوان أولاً (إلا كانت متوفرة فـ API)
+                    let thumbUrl = json.data.image || json.data.thumbnail;
+                    if (thumbUrl) {
+                        await sock.sendMessage(from, { 
+                            image: { url: thumbUrl }, 
+                            caption: `🎵 *${json.data.title || "الأغنية المطلوبة"}*` 
+                        }, { quoted: mek });
+                    }
+
+                    // 2. صيفط ملف الأوديو ثانياً
                     await sock.sendMessage(from, { 
                         audio: { url: json.data.audio }, 
                         mimetype: "audio/mp4", 
@@ -180,4 +190,4 @@ async function startBot() {
 }
 
 startBot();
-                
+            
