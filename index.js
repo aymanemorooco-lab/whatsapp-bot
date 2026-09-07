@@ -43,24 +43,23 @@ async function startBot() {
             }
         } else if (connection === "open") {
             console.log("✅ البوت متصل و خدام 24/7 في الخاص والجروبات للجميع!");
+
+            // طلب كود الربط فوراً وبشكل صحيح بمجرد فتح الاتصال
+            if (!sock.authState.creds.registered) {
+                try {
+                    const phoneNumber = "212601219867";
+                    console.log("⏳ جاري طلب كود الربط من واتساب...");
+                    let code = await sock.requestPairingCode(phoneNumber);
+                    code = code?.match(/.{1,4}/g)?.join("-") || code;
+                    console.log(`\n================================`);
+                    console.log(`🔑 كود الربط الخاص بك هو: ${code}`);
+                    console.log(`================================\n`);
+                } catch (error) {
+                    console.error("❌ خطأ أثناء طلب كود الربط:", error);
+                }
+            }
         }
     });
-
-    if (!sock.authState.creds.registered) {
-        setTimeout(async () => {
-            try {
-                const phoneNumber = "212601219867";
-                console.log("⏳ جاري طلب كود الربط من واتساب...");
-                let code = await sock.requestPairingCode(phoneNumber);
-                code = code?.match(/.{1,4}/g)?.join("-") || code;
-                console.log(`\n================================`);
-                console.log(`🔑 كود الربط الخاص بك هو: ${code}`);
-                console.log(`================================\n`);
-            } catch (error) {
-                console.error("❌ خطأ أثناء طلب كود الربط:", error);
-            }
-        }, 15000);
-    }
 
     sock.ev.on("messages.upsert", async (chatUpdate) => {
         try {
@@ -181,4 +180,4 @@ async function startBot() {
 }
 
 startBot();
-                   
+                
