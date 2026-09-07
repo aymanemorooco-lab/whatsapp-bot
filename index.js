@@ -42,7 +42,7 @@ async function startBot() {
                 setTimeout(startBot, 5000);
             }
         } else if (connection === "open") {
-            console.log("✅ البوت متصل و خدام 24/7 للجميع في الخاص والجروبات!");
+            console.log("✅ البوت متصل و خدام 24/7 في الخاص والجروبات للجميع!");
         }
     });
 
@@ -92,36 +92,40 @@ async function startBot() {
 🤖 *بوت التحميل 24/7 شغال للجميع* 🤖
 
 الأوامر المتاحة:
-🎵 \`song <اسم الأغنية>\`
-🎥 \`video <رابط يوتيوب>\`
+🎵 \`song <اسم الأغنية أو رابط يوتيوب>\`
+🎥 \`video <رابط يوتيوب، إنستغرام، أو فيسبوك>\`
 📋 \`menu\`
                 `.trim();
                 await sock.sendMessage(from, { text: menuText }, { quoted: mek });
                 return;
             }
 
+            // أمر الأغاني (Song) - كيقبل سمية أورابط يوتيوب
             if (text.startsWith("song ")) {
                 let query = body.slice(5).trim();
-                await sock.sendMessage(from, { text: `🔍 جاري البحث عن الأغنية: *${query}*...` }, { quoted: mek });
+                let videoUrl = query;
 
-                try {
+                if (!query.includes("http")) {
+                    await sock.sendMessage(from, { text: `🔍 جاري البحث عن: *${query}*...` }, { quoted: mek });
                     const searchResults = await ytSearch(query);
                     if (!searchResults || searchResults.videos.length === 0) {
                         await sock.sendMessage(from, { text: "❌ لم يتم العثور على نتائج." }, { quoted: mek });
                         return;
                     }
+                    videoUrl = searchResults.videos[0].url;
+                    await sock.sendMessage(from, { text: `🎵 جاري تحميل: *${searchResults.videos[0].title}*...` }, { quoted: mek });
+                } else {
+                    await sock.sendMessage(from, { text: `🎵 جاري تحميل الصوت من الرابط...` }, { quoted: mek });
+                }
 
-                    const video = searchResults.videos[0];
-                    await sock.sendMessage(from, { text: `🎵 جاري تحميل: *${video.title}*...` }, { quoted: mek });
-                    
-                    // استخدام API خارجي مستقر لجلب الـ audio بدون حظر 429
-                    const apiUrl = `https://delirius-apiv2.vercel.app/download/ytmp3?url=${encodeURIComponent(video.url)}`;
+                try {
+                    const apiUrl = `https://delirius-apiv2.vercel.app/download/ytmp3?url=${encodeURIComponent(videoUrl)}`;
                     const fetch = (await import('node-fetch')).default || global.fetch;
                     const res = await fetch(apiUrl);
                     const json = await res.json();
 
                     if (!json.status || !json.data.audio) {
-                        await sock.sendMessage(from, { text: "❌ تعذر جلب الأغنية حالياً، جرب لاحقاً." }, { quoted: mek });
+                        await sock.sendMessage(from, { text: "❌ تعذر جلب الأغنية حالياً." }, { quoted: mek });
                         return;
                     }
 
@@ -133,34 +137,38 @@ async function startBot() {
 
                 } catch (error) {
                     console.error("Song Error:", error);
-                    await sock.sendMessage(from, { text: "❌ حدث خطأ أثناء التحميل." }, { quoted: mek });
+                    await sock.sendMessage(from, { text: "❌ حدث خطأ أثناء تحميل الصوت." }, { quoted: mek });
                 }
                 return;
             }
 
+            // أمر الفيديو (Video) - يدعم يوتيوب، إنستغرام، وفيسبوك
             if (text.startsWith("video ")) {
                 const url = body.slice(6).trim();
-                if (!url.includes("youtube.com") && !url.includes("youtu.be")) {
-                    await sock.sendMessage(from, { text: "❌ يرجى إرسال رابط يوتيوب صالح." }, { quoted: mek });
+                if (!url.includes("http")) {
+                    await sock.sendMessage(from, { text: "❌ يرجى إرسال رابط صالح (YouTube, Instagram, Facebook)." }, { quoted: mek });
                     return;
                 }
 
-                await sock.sendMessage(from, { text: "📥 جاري تحميل الفيديو..." }, { quoted: mek });
+                await sock.sendMessage(from, { text: "📥 جاري تحميل الفيديو، انتظر قليلاً..." }, { quoted: mek });
 
                 try {
-                    const apiUrl = `https://delirius-apiv2.vercel.app/download/ytmp4?url=${encodeURIComponent(url)}`;
+                    // API ذكي كيتعرف على الرابط بوحدو (سواء يوتيوب، إنستغرام، أو فيسبوك)
+                    const apiUrl = `https://delirius-apiv2.vercel.app/download/meta?url=${encodeURIComponent(url)}`;
                     const fetch = (await import('node-fetch')).default || global.fetch;
                     const res = await fetch(apiUrl);
                     const json = await res.json();
 
-                    if (!json.status || !json.data.download) {
-                        await sock.sendMessage(from, { text: "❌ تعذر تحميل الفيديو." }, { quoted: mek });
+                    let downloadUrl = json?.data?.url || json?.data?.download || json?.data?.[0]?.url;
+
+                    if (!json.status || !downloadUrl) {
+                        await sock.sendMessage(from, { text: "❌ تعذر تحميل الفيديو من هدا الرابط." }, { quoted: mek });
                         return;
                     }
 
                     await sock.sendMessage(from, { 
-                        video: { url: json.data.download }, 
-                        caption: "🎥 هاهو الفيديو!" 
+                        video: { url: downloadUrl }, 
+                        caption: "🎥 هاهو الفيديو اللي طلبتي!" 
                     }, { quoted: mek });
                 } catch (error) {
                     console.error("Video Error:", error);
@@ -169,7 +177,7 @@ async function startBot() {
                 return;
             }
 
-        } catch (err) {
+        } chan (err) {
             console.error("Error:", err);
         }
     });
