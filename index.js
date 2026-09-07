@@ -100,7 +100,6 @@ async function startBot() {
                 return;
             }
 
-            // أمر الأغاني (Song) - كيقبل سمية أورابط يوتيوب
             if (text.startsWith("song ")) {
                 let query = body.slice(5).trim();
                 let videoUrl = query;
@@ -142,7 +141,6 @@ async function startBot() {
                 return;
             }
 
-            // أمر الفيديو (Video) - يدعم يوتيوب، إنستغرام، وفيسبوك
             if (text.startsWith("video ")) {
                 const url = body.slice(6).trim();
                 if (!url.includes("http")) {
@@ -153,7 +151,6 @@ async function startBot() {
                 await sock.sendMessage(from, { text: "📥 جاري تحميل الفيديو، انتظر قليلاً..." }, { quoted: mek });
 
                 try {
-                    // API ذكي كيتعرف على الرابط بوحدو (سواء يوتيوب، إنستغرام، أو فيسبوك)
                     const apiUrl = `https://delirius-apiv2.vercel.app/download/meta?url=${encodeURIComponent(url)}`;
                     const fetch = (await import('node-fetch')).default || global.fetch;
                     const res = await fetch(apiUrl);
@@ -177,11 +174,11 @@ async function startBot() {
                 return;
             }
 
-        } chan (err) {
+        } catch (err) {
             console.error("Error:", err);
         }
     });
 }
 
 startBot();
-        
+                   
