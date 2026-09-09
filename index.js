@@ -11,7 +11,7 @@ const ytSearch = require("yt-search");
 const fs = require("fs");
 const http = require("http");
 
-// سيرفر وهمي باش Railway يخلي البوت شغال ديما وميطفيش الـ Container
+// سيرفر وهمي لتفادي إغلاق الـ Container تلقائياً فـ Railway
 const PORT = process.env.PORT || 3000;
 http.createServer((req, res) => { 
     res.writeHead(200, { "Content-Type": "text/plain" });
@@ -21,7 +21,7 @@ http.createServer((req, res) => {
 });
 
 async function startBot() {
-    // استخدام مجلد كاش نقي لتفادي تداخل البيانات القديمة
+    // استخدام مجلد كاش نقي وجديد لتفادي تداخل البيانات القديمة
     const { state, saveCreds } = await useMultiFileAuthState("new_clean_session");
 
     const sock = makeWASocket({
@@ -71,13 +71,13 @@ async function startBot() {
     sock.ev.on("messages.upsert", async (chatUpdate) => {
         try {
             if (!chatUpdate.messages || chatUpdate.messages.length === 0) return;
-            const mek = chatUpdate.messages; 
+            const mek = chatUpdate.messages[0]; 
             
             if (!mek || !mek.message) return;
             if (mek.key.remoteJid === 'status@broadcast') return;
 
             const from = mek.key.remoteJid;
-            const messageType = Object.keys(mek.message);
+            const messageType = Object.keys(mek.message)[0];
             let body = "";
 
             if (messageType === "conversation") {
@@ -121,8 +121,8 @@ async function startBot() {
                         await sock.sendMessage(targetChat, { text: `❌ لم يتم العثور على نتائج.` }, { quoted: mek });
                         return;
                     }
-                    videoUrl = searchResults.videos.url;
-                    await sock.sendMessage(targetChat, { text: `🎵 جاري تحميل: *${searchResults.videos.title}*...` }, { quoted: mek });
+                    videoUrl = searchResults.videos[0].url;
+                    await sock.sendMessage(targetChat, { text: `🎵 جاري تحميل: *${searchResults.videos[0].title}*...` }, { quoted: mek });
                 } else {
                     await sock.sendMessage(targetChat, { text: `🎵 جاري تحميل الصوت من الرابط...` }, { quoted: mek });
                 }
@@ -166,7 +166,7 @@ async function startBot() {
                     const res = await fetch(apiUrl);
                     const json = await res.json();
 
-                    let downloadUrl = json?.data?.url || json?.data?.download || (json?.data && json.data?.url);
+                    let downloadUrl = json?.data?.url || json?.data?.download || (json?.data && json.data?.[0]?.url);
 
                     if (!json.status || !downloadUrl) {
                         await sock.sendMessage(targetChat, { text: `❌ تعذر تحميل الفيديو من هذا الرابط.` }, { quoted: mek });
