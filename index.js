@@ -8,6 +8,9 @@ const {
 const pino = require("pino");
 const ytSearch = require("yt-search");
 
+// 🟢 النمرة ديالك (المالك)
+const OWNER_NUMBER = "212601219867"; 
+
 async function startBot() {
     const { state, saveCreds } = await useMultiFileAuthState("auth_info_baileys");
     const { version } = await fetchLatestBaileysVersion();
@@ -20,8 +23,24 @@ async function startBot() {
             creds: state.creds,
             keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "fatal" })),
         },
-        browser: ["Chrome (Linux)", "Chrome", "120.0.0.0"]
+        browser: ["Ubuntu", "Chrome", "20.0.04"]
     });
+
+    // طلب كود الربط
+    if (!sock.authState.creds.registered) {
+        setTimeout(async () => {
+            try {
+                console.log("⏳ جاري طلب كود الربط من واتساب...");
+                let code = await sock.requestPairingCode(OWNER_NUMBER);
+                code = code?.match(/.{1,4}/g)?.join("-") || code;
+                console.log(`\n================================`);
+                console.log(`🔑 كود الربط الخاص بك هو: ${code}`);
+                console.log(`================================\n`);
+            } catch (error) {
+                console.error("❌ خطأ أثناء طلب كود الربط:", error);
+            }
+        }, 6000);
+    }
 
     sock.ev.on("creds.update", saveCreds);
 
@@ -31,37 +50,27 @@ async function startBot() {
             const statusCode = lastDisconnect?.error?.output?.statusCode;
             const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
             console.log(`انقطع الاتصال (Code: ${statusCode})، جاري إعادة المحاولة...`, shouldReconnect);
-            
             if (shouldReconnect) {
                 setTimeout(startBot, 5000);
             }
         } else if (connection === "open") {
-            console.log("✅ البوت متصل و خدام 24/7 في الخاص والجروبات للجميع!");
-
-            if (!sock.authState.creds.registered) {
-                setTimeout(async () => {
-                    try {
-                        const phoneNumber = "212601219867";
-                        console.log("⏳ جاري طلب كود الربط من واتساب...");
-                        let code = await sock.requestPairingCode(phoneNumber);
-                        code = code?.match(/.{1,4}/g)?.join("-") || code;
-                        console.log(`\n================================`);
-                        console.log(`🔑 كود الربط الخاص بك هو: ${code}`);
-                        console.log(`================================\n`);
-                    } catch (error) {
-                        console.error("❌ خطأ أثناء طلب كود الربط:", error);
-                    }
-                }, 5000);
-            }
+            console.log("✅ البوت متصل بنجاح وشغال دابا للجميع وليك نتا الأول!");
         }
     });
 
     sock.ev.on("messages.upsert", async (chatUpdate) => {
         try {
+            if (!chatUpdate.messages || chatUpdate.messages.length === 0) return;
             const mek = chatUpdate.messages[0];
+            
             if (!mek || !mek.message) return;
             if (mek.key.remoteJid === 'status@broadcast') return;
 
+            // 🛠️ التعديل المهم: هنا البوت غايعرف واش الرسالة جاية منك نتا (حتى لو كانت fromMe)
+            const from = mek.key.remoteJid;
+            const isMe = mek.key.fromMe; 
+            
+            // جلب نص الرسالة
             const messageType = Object.keys(mek.message)[0];
             let body = "";
 
@@ -77,12 +86,14 @@ async function startBot() {
 
             if (!body) return;
 
-            const from = mek.key.remoteJid;
             const text = body.trim().toLowerCase();
-            const targetChat = from; // الرد غادي يكون في نفس الجروب فين صيفطتي
+            
+            // إذا صيفطتي لراسك ف الخاص، الرد غايكون ف نمرتك نيت
+            const targetChat = isMe ? sock.user.id.split(':')[0] + '@s.whatsapp.net' : from;
 
-            console.log(`📩 رسالة من (${from}): ${body}`);
+            console.log(`📩 رسالة من (${from}) [fromMe: ${isMe}]: ${body}`);
 
+            // 1️⃣ أمر القائمة (Menu)
             if (text === "menu" || text === ".menu") {
                 const menuText = `
 🤖 *بوت التحميل 24/7 شغال للجميع* 🤖
@@ -96,6 +107,7 @@ async function startBot() {
                 return;
             }
 
+            // 2️⃣ أمر الأغاني (Song)
             if (text.startsWith("song ")) {
                 let query = body.slice(5).trim();
                 let videoUrl = query;
@@ -114,7 +126,7 @@ async function startBot() {
                 }
 
                 try {
-                    const apiUrl = `https://delirius-apiv2.vercel.app/download/ytmp3?url=${encodeURIComponent(videoUrl)}`;
+                    const apiUrl = `https://vercel.app{encodeURIComponent(videoUrl)}`;
                     const fetch = (await import('node-fetch')).default || global.fetch;
                     const res = await fetch(apiUrl);
                     const json = await res.json();
@@ -137,6 +149,7 @@ async function startBot() {
                 return;
             }
 
+            // 3️⃣ أمر الفيديو (Video)
             if (text.startsWith("video ")) {
                 const url = body.slice(6).trim();
                 if (!url.includes("http")) {
@@ -147,7 +160,7 @@ async function startBot() {
                 await sock.sendMessage(targetChat, { text: `📥 جاري تحميل الفيديو، انتظر قليلاً...` }, { quoted: mek });
 
                 try {
-                    const apiUrl = `https://delirius-apiv2.vercel.app/download/meta?url=${encodeURIComponent(url)}`;
+                    const apiUrl = `https://vercel.app{encodeURIComponent(url)}`;
                     const fetch = (await import('node-fetch')).default || global.fetch;
                     const res = await fetch(apiUrl);
                     const json = await res.json();
@@ -155,7 +168,7 @@ async function startBot() {
                     let downloadUrl = json?.data?.url || json?.data?.download || json?.data?.[0]?.url;
 
                     if (!json.status || !downloadUrl) {
-                        await sock.sendMessage(targetChat, { text: `❌ تعذر تحميل الفيديو من هدا الرابط.` }, { quoted: mek });
+                        await sock.sendMessage(targetChat, { text: `❌ تعذر تحميل الفيديو من هذا الرابط.` }, { quoted: mek });
                         return;
                     }
 
@@ -177,4 +190,4 @@ async function startBot() {
 }
 
 startBot();
-                           
+                       
