@@ -1,18 +1,6 @@
-{
-  "name": "whatsapp-bot",
-  "version": "1.0.0",
-  "description": "WhatsApp Bot with Pairing Code, YouTube & Video Download",
-  "main": "index.js",
-  "scripts": {
-    "start": "node index.js"
-  },
-  "dependencies": {
-    "@whiskeysockets/baileys": "latest",
+"dependencies": {
+    "@whiskeysockets/baileys": "^6.7.9",
     "pino": "^9.0.0",
     "yt-search": "^2.10.4",
-    "ytdl-core": "^4.11.5"
-  },
-  "engines": {
-    "node": ">=20.0.0"
-  }
+    "node-fetch": "^3.3.2"
 }
