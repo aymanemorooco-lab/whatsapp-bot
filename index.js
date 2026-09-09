@@ -3,14 +3,15 @@ const {
     useMultiFileAuthState,
     DisconnectReason,
     fetchLatestBaileysVersion,
-    makeCacheableSignalKeyStore
+    makeCacheableSignalKeyStore,
+    Browsers
 } = require("@whiskeysockets/baileys");
 const pino = require("pino");
 const ytSearch = require("yt-search");
 
 async function startBot() {
-    // 🛠️ عوضنا المجلد القديم بـ "session" نقي باش ما يبقاش يرجع للكاش الميت
-    const { state, saveCreds } = await useMultiFileAuthState("session");
+    // 🛠️ تم تغيير المجلد لـ new_clean_session لمسح وتخطي كاع الكاش القديم الميت فـ Railway تلقائيًا
+    const { state, saveCreds } = await useMultiFileAuthState("new_clean_session");
     const { version } = await fetchLatestBaileysVersion();
 
     const sock = makeWASocket({
@@ -21,20 +22,21 @@ async function startBot() {
             creds: state.creds,
             keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "fatal" })),
         },
-        browser: ["Chrome (Linux)", "Chrome", "120.0.0.0"]
+        // استخدام معرف macOS لتفادي حظر وسيرفرات الـ Pairing المكتظة لـ أندرويد
+        browser: Browsers.macOS("Desktop")
     });
 
     sock.ev.on("creds.update", saveCreds);
 
-    // 🔑 طلب كود الربط مباشرة أول ما يشتغل البوت
+    // طلب كود ربط نقي وجديد من السيرفر مباشرة
     setTimeout(async () => {
         try {
             const phoneNumber = "212601219867";
-            console.log("⏳ جاري طلب كود الربط من واتساب...");
+            console.log("⏳ جاري طلب كود ربط جديد ونقي من واتساب...");
             let code = await sock.requestPairingCode(phoneNumber);
             code = code?.match(/.{1,4}/g)?.join("-") || code;
             console.log(`\n================================`);
-            console.log(`🔑 كود الربط الخاص بك هو: ${code}`);
+            console.log(`🔑 كود الربط الجديد الخاص بك هو: ${code}`);
             console.log(`================================\n`);
         } catch (error) {
             console.error("❌ خطأ أثناء طلب كود الربط:", error);
@@ -52,21 +54,19 @@ async function startBot() {
                 setTimeout(startBot, 5000);
             }
         } else if (connection === "open") {
-            console.log("✅ البوت متصل و خدام 24/7 للجميع وللمالك!");
+            console.log("✅ البوت متصل و خدام 24/7 في الخاص والجروبات للجميع وللمالك!");
         }
     });
 
     sock.ev.on("messages.upsert", async (chatUpdate) => {
         try {
-            // 🛠️ جلب الرسالة الأولى بطريقة صحيحة وآمنة تمنع Crash السيرفر
             if (!chatUpdate.messages || chatUpdate.messages.length === 0) return;
             const mek = chatUpdate.messages[0];
-            
             if (!mek || !mek.message) return;
             if (mek.key.remoteJid === 'status@broadcast') return;
 
             const from = mek.key.remoteJid;
-            const isMe = mek.key.fromMe; // كتعرف واش نتا اللي صيفطتي
+            const isMe = mek.key.fromMe; 
             
             const messageType = Object.keys(mek.message)[0];
             let body = "";
@@ -85,7 +85,7 @@ async function startBot() {
 
             const text = body.trim().toLowerCase();
             
-            // 🛠️ الإصلاح اللي بغيتي: يلا صيفطتي لراسك ف الخاص، البوت غايرد عليك ف نمرتك نيت بلا ما يتجاهلك
+            // تعديل مسار الشات: يضمن الرد عليك حتى لو أرسلت لنفسك
             const targetChat = isMe ? (sock.user.id.split(':')[0] + '@s.whatsapp.net') : from;
 
             console.log(`📩 رسالة من (${from}): ${body}`);
@@ -159,7 +159,7 @@ async function startBot() {
                     const res = await fetch(apiUrl);
                     const json = await res.json();
 
-                    let downloadUrl = json?.data?.url || json?.data?.download || (json?.data && json.data[0]?.url);
+                    let downloadUrl = json?.data?.url || json?.data?.download || json?.data?.[0]?.url;
 
                     if (!json.status || !downloadUrl) {
                         await sock.sendMessage(targetChat, { text: `❌ تعذر تحميل الفيديو من هدا الرابط.` }, { quoted: mek });
@@ -184,4 +184,4 @@ async function startBot() {
 }
 
 startBot();
-            
+                        
