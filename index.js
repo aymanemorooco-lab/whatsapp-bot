@@ -8,11 +8,9 @@ const {
 const pino = require("pino");
 const ytSearch = require("yt-search");
 
-// 🟢 النمرة ديالك (المالك)
-const OWNER_NUMBER = "212601219867"; 
-
 async function startBot() {
-    const { state, saveCreds } = await useMultiFileAuthState("auth_info_baileys");
+    // 🛠️ عوضنا المجلد القديم بـ "session" نقي باش ما يبقاش يرجع للكاش الميت
+    const { state, saveCreds } = await useMultiFileAuthState("session");
     const { version } = await fetchLatestBaileysVersion();
 
     const sock = makeWASocket({
@@ -23,26 +21,25 @@ async function startBot() {
             creds: state.creds,
             keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "fatal" })),
         },
-        browser: ["Ubuntu", "Chrome", "20.0.04"]
+        browser: ["Chrome (Linux)", "Chrome", "120.0.0.0"]
     });
 
-    // طلب كود الربط إذا لم يكن مسجلاً
-    if (!sock.authState.creds.registered) {
-        setTimeout(async () => {
-            try {
-                console.log("⏳ جاري طلب كود الربط من واتساب...");
-                let code = await sock.requestPairingCode(OWNER_NUMBER);
-                code = code?.match(/.{1,4}/g)?.join("-") || code;
-                console.log(`\n================================`);
-                console.log(`🔑 كود الربط الخاص بك هو: ${code}`);
-                console.log(`================================\n`);
-            } catch (error) {
-                console.error("❌ خطأ أثناء طلب كود الربط:", error);
-            }
-        }, 6000);
-    }
-
     sock.ev.on("creds.update", saveCreds);
+
+    // 🔑 طلب كود الربط مباشرة أول ما يشتغل البوت
+    setTimeout(async () => {
+        try {
+            const phoneNumber = "212601219867";
+            console.log("⏳ جاري طلب كود الربط من واتساب...");
+            let code = await sock.requestPairingCode(phoneNumber);
+            code = code?.match(/.{1,4}/g)?.join("-") || code;
+            console.log(`\n================================`);
+            console.log(`🔑 كود الربط الخاص بك هو: ${code}`);
+            console.log(`================================\n`);
+        } catch (error) {
+            console.error("❌ خطأ أثناء طلب كود الربط:", error);
+        }
+    }, 6000);
 
     sock.ev.on("connection.update", async (update) => {
         const { connection, lastDisconnect } = update;
@@ -50,26 +47,27 @@ async function startBot() {
             const statusCode = lastDisconnect?.error?.output?.statusCode;
             const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
             console.log(`انقطع الاتصال (Code: ${statusCode})، جاري إعادة المحاولة...`, shouldReconnect);
+            
             if (shouldReconnect) {
                 setTimeout(startBot, 5000);
             }
         } else if (connection === "open") {
-            console.log("✅ تم الاتصال بالواتساب بنجاح ويشتغل البوت 24/7 ✨");
+            console.log("✅ البوت متصل و خدام 24/7 للجميع وللمالك!");
         }
     });
 
     sock.ev.on("messages.upsert", async (chatUpdate) => {
         try {
+            // 🛠️ جلب الرسالة الأولى بطريقة صحيحة وآمنة تمنع Crash السيرفر
             if (!chatUpdate.messages || chatUpdate.messages.length === 0) return;
-            const mek = chatUpdate.messages[0]; // تصحيح: أخذ أول عنصر من المصفوفة
+            const mek = chatUpdate.messages[0];
             
             if (!mek || !mek.message) return;
             if (mek.key.remoteJid === 'status@broadcast') return;
 
             const from = mek.key.remoteJid;
-            const isMe = mek.key.fromMe; // هل الرسالة خارجة مني أنا؟
+            const isMe = mek.key.fromMe; // كتعرف واش نتا اللي صيفطتي
             
-            // جلب نوع الرسالة والنص
             const messageType = Object.keys(mek.message)[0];
             let body = "";
 
@@ -87,12 +85,11 @@ async function startBot() {
 
             const text = body.trim().toLowerCase();
             
-            // تصحيح الشات المستهدف: إذا كنت أنا من أرسل لنفسي في الخاص
+            // 🛠️ الإصلاح اللي بغيتي: يلا صيفطتي لراسك ف الخاص، البوت غايرد عليك ف نمرتك نيت بلا ما يتجاهلك
             const targetChat = isMe ? (sock.user.id.split(':')[0] + '@s.whatsapp.net') : from;
 
-            console.log(`📩 رسالة من (${from}) [fromMe: ${isMe}]: ${body}`);
+            console.log(`📩 رسالة من (${from}): ${body}`);
 
-            // 1️⃣ أمر القائمة (Menu)
             if (text === "menu" || text === ".menu") {
                 const menuText = `
 🤖 *بوت التحميل 24/7 شغال للجميع* 🤖
@@ -106,7 +103,6 @@ async function startBot() {
                 return;
             }
 
-            // 2️⃣ أمر الأغاني (Song)
             if (text.startsWith("song ")) {
                 let query = body.slice(5).trim();
                 let videoUrl = query;
@@ -148,7 +144,6 @@ async function startBot() {
                 return;
             }
 
-            // 3️⃣ أمر الفيديو (Video)
             if (text.startsWith("video ")) {
                 const url = body.slice(6).trim();
                 if (!url.includes("http")) {
@@ -167,7 +162,7 @@ async function startBot() {
                     let downloadUrl = json?.data?.url || json?.data?.download || (json?.data && json.data[0]?.url);
 
                     if (!json.status || !downloadUrl) {
-                        await sock.sendMessage(targetChat, { text: `❌ تعذر تحميل الفيديو من هذا الرابط.` }, { quoted: mek });
+                        await sock.sendMessage(targetChat, { text: `❌ تعذر تحميل الفيديو من هدا الرابط.` }, { quoted: mek });
                         return;
                     }
 
@@ -189,3 +184,4 @@ async function startBot() {
 }
 
 startBot();
+            
