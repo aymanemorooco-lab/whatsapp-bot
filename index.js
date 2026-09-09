@@ -7,6 +7,7 @@ const {
 } = require("@whiskeysockets/baileys");
 const pino = require("pino");
 const ytSearch = require("yt-search");
+const fs = require('fs');
 
 async function startBot() {
     const { state, saveCreds } = await useMultiFileAuthState("auth_info_baileys");
@@ -27,40 +28,38 @@ async function startBot() {
 
     sock.ev.on("connection.update", async (update) => {
         const { connection, lastDisconnect } = update;
-        
         if (connection === "close") {
             const statusCode = lastDisconnect?.error?.output?.statusCode;
             const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
-            console.log(`❌ انقطع الاتصال (Code: ${statusCode})، جاري إعادة المحاولة...`);
+            console.log(`انقطع الاتصال (Code: ${statusCode})، جاري إعادة المحاولة...`, shouldReconnect);
+            
             if (shouldReconnect) {
                 setTimeout(startBot, 5000);
             }
         } else if (connection === "open") {
-            console.log("✅ البوت متصل بنجاح وجاهز لاستقبال الرسائل 24/7!");
+            console.log("✅ البوت متصل و خدام 24/7 في الخاص والجروبات للجميع!");
 
-            // طلب كود الربط إذا لم يكن مسجلاً
+            // طلب كود الربط فقط إذا لم يكن الجهاز مسجلاً من قبل
             if (!sock.authState.creds.registered) {
-                try {
-                    const phoneNumber = "212601219867";
-                    console.log("⏳ جاري طلب كود الربط من واتساب...");
-                    // انتظار قليلاً لضمان استقرار الاتصال قبل جلب الكود
-                    await new Promise(resolve => setTimeout(resolve, 3000));
-                    let code = await sock.requestPairingCode(phoneNumber);
-                    code = code?.match(/.{1,4}/g)?.join("-") || code;
-                    console.log(`\n================================`);
-                    console.log(`🔑 كود الربط الخاص بك هو: ${code}`);
-                    console.log(`================================\n`);
-                } catch (error) {
-                    console.error("❌ خطأ أثناء طلب كود الربط:", error);
-                }
+                setTimeout(async () => {
+                    try {
+                        const phoneNumber = "212601219867";
+                        console.log("⏳ جاري طلب كود الربط من واتساب...");
+                        let code = await sock.requestPairingCode(phoneNumber);
+                        code = code?.match(/.{1,4}/g)?.join("-") || code;
+                        console.log(`\n================================`);
+                        console.log(`🔑 كود الربط الخاص بك هو: ${code}`);
+                        console.log(`================================\n`);
+                    } catch (error) {
+                        console.error("❌ خطأ أثناء طلب كود الربط:", error);
+                    }
+                }, 4000);
             }
         }
     });
 
-    // استقبال ومعالجة الرسائل
     sock.ev.on("messages.upsert", async (chatUpdate) => {
         try {
-            // إزالة شرط chatUpdate.type لضمان عدم ضياع أي رسالة
             const mek = chatUpdate.messages[0];
             if (!mek || !mek.message) return;
             if (mek.key.remoteJid === 'status@broadcast') return;
@@ -82,63 +81,97 @@ async function startBot() {
 
             const from = mek.key.remoteJid;
             const text = body.trim().toLowerCase();
-            console.log(`📩 توصلت برسالة من (${from}): ${body}`);
+            console.log(`📩 رسالة من (${from}): ${body}`);
 
-            // أمر menu للتجربة
             if (text === "menu" || text === ".menu") {
-                await sock.sendMessage(from, { 
-                    text: "🤖 *البوت خدام بنجاح!*\n\nالأوامر المتاحة:\n🎵 `song <اسم الأغنية>`" 
-                }, { quoted: mek });
+                const menuText = `
+🤖 *بوت التحميل 24/7 شغال للجميع* 🤖
+
+الأوامر المتاحة:
+🎵 \`song <اسم الأغنية أو رابط يوتيوب>\`
+🎥 \`video <رابط يوتيوب، إنستغرام، أو فيسبوك>\`
+📋 \`menu\`
+                `.trim();
+                await sock.sendMessage(from, { text: menuText }, { quoted: mek });
                 return;
             }
 
-            // أمر song (صورة + أوديو)
             if (text.startsWith("song ")) {
                 let query = body.slice(5).trim();
                 let videoUrl = query;
 
-                await sock.sendMessage(from, { text: `🔍 جاري البحث والتحميل: *${query}*...` }, { quoted: mek });
-
                 if (!query.includes("http")) {
+                    await sock.sendMessage(from, { text: `🔍 جاري البحث عن: *${query}*...` }, { quoted: mek });
                     const searchResults = await ytSearch(query);
                     if (!searchResults || searchResults.videos.length === 0) {
                         await sock.sendMessage(from, { text: "❌ لم يتم العثور على نتائج." }, { quoted: mek });
                         return;
                     }
                     videoUrl = searchResults.videos[0].url;
+                    await sock.sendMessage(from, { text: `🎵 جاري تحميل: *${searchResults.videos[0].title}*...` }, { quoted: mek });
+                } else {
+                    await sock.sendMessage(from, { text: `🎵 جاري تحميل الصوت من الرابط...` }, { quoted: mek });
                 }
 
-                const apiUrl = `https://delirius-apiv2.vercel.app/download/ytmp3?url=${encodeURIComponent(videoUrl)}`;
-                const fetch = (await import('node-fetch')).default || global.fetch;
-                const res = await fetch(apiUrl);
-                const json = await res.json();
+                try {
+                    const apiUrl = `https://delirius-apiv2.vercel.app/download/ytmp3?url=${encodeURIComponent(videoUrl)}`;
+                    const fetch = (await import('node-fetch')).default || global.fetch;
+                    const res = await fetch(apiUrl);
+                    const json = await res.json();
 
-                if (!json.status || !json.data.audio) {
-                    await sock.sendMessage(from, { text: "❌ تعذر جلب الأغنية حالياً." }, { quoted: mek });
+                    if (!json.status || !json.data.audio) {
+                        await sock.sendMessage(from, { text: "❌ تعذر جلب الأغنية حالياً." }, { quoted: mek });
+                        return;
+                    }
+
+                    await sock.sendMessage(from, { 
+                        audio: { url: json.data.audio }, 
+                        mimetype: "audio/mp4", 
+                        ptt: false 
+                    }, { quoted: mek });
+
+                } catch (error) {
+                    console.error("Song Error:", error);
+                    await sock.sendMessage(from, { text: "❌ حدث خطأ أثناء تحميل الصوت." }, { quoted: mek });
+                }
+                return;
+            }
+
+            if (text.startsWith("video ")) {
+                const url = body.slice(6).trim();
+                if (!url.includes("http")) {
+                    await sock.sendMessage(from, { text: "❌ يرجى إرسال رابط صالح (YouTube, Instagram, Facebook)." }, { quoted: mek });
                     return;
                 }
 
-                // 1. إرسال التصويرة والعنوان أولاً
-                let thumbUrl = json.data.image || json.data.thumbnail;
-                if (thumbUrl) {
+                await sock.sendMessage(from, { text: "📥 جاري تحميل الفيديو، انتظر قليلاً..." }, { quoted: mek });
+
+                try {
+                    const apiUrl = `https://delirius-apiv2.vercel.app/download/meta?url=${encodeURIComponent(url)}`;
+                    const fetch = (await import('node-fetch')).default || global.fetch;
+                    const res = await fetch(apiUrl);
+                    const json = await res.json();
+
+                    let downloadUrl = json?.data?.url || json?.data?.download || json?.data?.[0]?.url;
+
+                    if (!json.status || !downloadUrl) {
+                        await sock.sendMessage(from, { text: "❌ تعذر تحميل الفيديو من هدا الرابط." }, { quoted: mek });
+                        return;
+                    }
+
                     await sock.sendMessage(from, { 
-                        image: { url: thumbUrl }, 
-                        caption: `🎵 *${json.data.title || "الأغنية المطلوبة"}*` 
+                        video: { url: downloadUrl }, 
+                        caption: "🎥 هاهو الفيديو اللي طلبتي!" 
                     }, { quoted: mek });
+                } catch (error) {
+                    console.error("Video Error:", error);
+                    await sock.sendMessage(from, { text: "❌ حدث خطأ أثناء تحميل الفيديو." }, { quoted: mek });
                 }
-
-                // 2. إرسال الأوديو ثانياً
-                await sock.sendMessage(from, { 
-                    audio: { url: json.data.audio }, 
-                    mimetype: "audio/mp4", 
-                    ptt: false 
-                }, { quoted: mek });
-
                 return;
             }
 
         } catch (err) {
-            console.error("خطأ في معالجة الرسالة:", err);
+            console.error("Error:", err);
         }
     });
 }
