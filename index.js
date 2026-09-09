@@ -21,30 +21,23 @@ http.createServer((req, res) => {
 });
 
 async function startBot() {
+    // استخدام مجلد كاش نقي لتفادي تداخل البيانات القديمة
     const { state, saveCreds } = await useMultiFileAuthState("new_clean_session");
-    
-    // جلب أحدث نسخة متوافقة تلقائياً لتفادي خطأ 428
-    let version =; 
-    try {
-        const latest = await fetchLatestBaileysVersion();
-        if (latest && latest.version) version = latest.version;
-    } catch (e) {
-        console.log("⚠️ تعذر جلب النسخة تلقائياً، جاري استخدام النسخة الاحتياطية.");
-    }
 
     const sock = makeWASocket({
-        version,
         logger: pino({ level: "silent" }),
         printQRInTerminal: false,
         auth: {
             creds: state.creds,
             keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "fatal" })),
         },
+        // متصفح رسمي ومحدث لتفادي الـ Block د السيرفرات
         browser: Browsers.macOS("Desktop")
     });
 
     sock.ev.on("creds.update", saveCreds);
 
+    // طلب كود الربط بطريقة آمنة ومحمية من الـ Crash
     if (!sock.authState.creds.registered) {
         setTimeout(async () => {
             try {
@@ -78,13 +71,13 @@ async function startBot() {
     sock.ev.on("messages.upsert", async (chatUpdate) => {
         try {
             if (!chatUpdate.messages || chatUpdate.messages.length === 0) return;
-            const mek = chatUpdate.messages[0]; 
+            const mek = chatUpdate.messages; 
             
             if (!mek || !mek.message) return;
             if (mek.key.remoteJid === 'status@broadcast') return;
 
             const from = mek.key.remoteJid;
-            const messageType = Object.keys(mek.message)[0];
+            const messageType = Object.keys(mek.message);
             let body = "";
 
             if (messageType === "conversation") {
@@ -128,8 +121,8 @@ async function startBot() {
                         await sock.sendMessage(targetChat, { text: `❌ لم يتم العثور على نتائج.` }, { quoted: mek });
                         return;
                     }
-                    videoUrl = searchResults.videos[0].url;
-                    await sock.sendMessage(targetChat, { text: `🎵 جاري تحميل: *${searchResults.videos[0].title}*...` }, { quoted: mek });
+                    videoUrl = searchResults.videos.url;
+                    await sock.sendMessage(targetChat, { text: `🎵 جاري تحميل: *${searchResults.videos.title}*...` }, { quoted: mek });
                 } else {
                     await sock.sendMessage(targetChat, { text: `🎵 جاري تحميل الصوت من الرابط...` }, { quoted: mek });
                 }
@@ -173,7 +166,7 @@ async function startBot() {
                     const res = await fetch(apiUrl);
                     const json = await res.json();
 
-                    let downloadUrl = json?.data?.url || json?.data?.download || (json?.data && json.data[0]?.url);
+                    let downloadUrl = json?.data?.url || json?.data?.download || (json?.data && json.data?.url);
 
                     if (!json.status || !downloadUrl) {
                         await sock.sendMessage(targetChat, { text: `❌ تعذر تحميل الفيديو من هذا الرابط.` }, { quoted: mek });
