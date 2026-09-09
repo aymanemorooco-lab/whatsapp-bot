@@ -21,10 +21,9 @@ http.createServer((req, res) => {
 });
 
 async function startBot() {
-    // استخدام مجلد كاش جديد ومستقل تماماً لتفادي تداخل البيانات القديمة
     const { state, saveCreds } = await useMultiFileAuthState("new_clean_session");
     
-    // 🛠️ تم تصحيح الخطأ: وضع نسخة احتياطية آمنة ومحدثة مباشرة لتفادي خطأ الـ Build
+    // جلب أحدث نسخة متوافقة تلقائياً لتفادي خطأ 428
     let version =; 
     try {
         const latest = await fetchLatestBaileysVersion();
@@ -41,13 +40,11 @@ async function startBot() {
             creds: state.creds,
             keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "fatal" })),
         },
-        // متصفح رسمي ومحدث لتفادي الـ Block د السيرفرات
         browser: Browsers.macOS("Desktop")
     });
 
     sock.ev.on("creds.update", saveCreds);
 
-    // طلب كود الربط بطريقة آمنة ومحمية من الـ Crash
     if (!sock.authState.creds.registered) {
         setTimeout(async () => {
             try {
@@ -59,7 +56,7 @@ async function startBot() {
                 console.log(`🔑 كود الربط الخاص بك هو: ${code}`);
                 console.log(`================================\n`);
             } catch (error) {
-                console.error("❌ السيرفر مشغول حالياً، جاري إعادة المحاولة تلقائياً... Error:", error.message);
+                console.error("❌ السيرفر مشغول حالياً:", error.message);
             }
         }, 8000);
     }
@@ -69,8 +66,7 @@ async function startBot() {
         if (connection === "close") {
             const statusCode = lastDisconnect?.error?.output?.statusCode;
             const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
-            console.log(`⚠️ انقطع الاتصال (Code: ${statusCode})، جاري إعادة المحاولة فوراً...`);
-            
+            console.log(`⚠️ انقطع الاتصال (Code: ${statusCode})، جاري إعادة المحاولة...`);
             if (shouldReconnect) {
                 setTimeout(startBot, 5000);
             }
@@ -82,7 +78,7 @@ async function startBot() {
     sock.ev.on("messages.upsert", async (chatUpdate) => {
         try {
             if (!chatUpdate.messages || chatUpdate.messages.length === 0) return;
-            const mek = chatUpdate.messages[0]; // قراءة أول رسالة ديريكت بشكل صحيح
+            const mek = chatUpdate.messages[0]; 
             
             if (!mek || !mek.message) return;
             if (mek.key.remoteJid === 'status@broadcast') return;
@@ -177,7 +173,7 @@ async function startBot() {
                     const res = await fetch(apiUrl);
                     const json = await res.json();
 
-                    let downloadUrl = json?.data?.url || json?.data?.download || (json?.data && json.data?.url);
+                    let downloadUrl = json?.data?.url || json?.data?.download || (json?.data && json.data[0]?.url);
 
                     if (!json.status || !downloadUrl) {
                         await sock.sendMessage(targetChat, { text: `❌ تعذر تحميل الفيديو من هذا الرابط.` }, { quoted: mek });
