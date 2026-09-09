@@ -26,7 +26,7 @@ async function startBot() {
         browser: ["Ubuntu", "Chrome", "20.0.04"]
     });
 
-    // طلب كود الربط
+    // طلب كود الربط إذا لم يكن مسجلاً
     if (!sock.authState.creds.registered) {
         setTimeout(async () => {
             try {
@@ -54,23 +54,22 @@ async function startBot() {
                 setTimeout(startBot, 5000);
             }
         } else if (connection === "open") {
-            console.log("✅ البوت متصل بنجاح وشغال دابا للجميع وليك نتا الأول!");
+            console.log("✅ تم الاتصال بالواتساب بنجاح ويشتغل البوت 24/7 ✨");
         }
     });
 
     sock.ev.on("messages.upsert", async (chatUpdate) => {
         try {
             if (!chatUpdate.messages || chatUpdate.messages.length === 0) return;
-            const mek = chatUpdate.messages[0];
+            const mek = chatUpdate.messages[0]; // تصحيح: أخذ أول عنصر من المصفوفة
             
             if (!mek || !mek.message) return;
             if (mek.key.remoteJid === 'status@broadcast') return;
 
-            // 🛠️ التعديل المهم: هنا البوت غايعرف واش الرسالة جاية منك نتا (حتى لو كانت fromMe)
             const from = mek.key.remoteJid;
-            const isMe = mek.key.fromMe; 
+            const isMe = mek.key.fromMe; // هل الرسالة خارجة مني أنا؟
             
-            // جلب نص الرسالة
+            // جلب نوع الرسالة والنص
             const messageType = Object.keys(mek.message)[0];
             let body = "";
 
@@ -88,8 +87,8 @@ async function startBot() {
 
             const text = body.trim().toLowerCase();
             
-            // إذا صيفطتي لراسك ف الخاص، الرد غايكون ف نمرتك نيت
-            const targetChat = isMe ? sock.user.id.split(':')[0] + '@s.whatsapp.net' : from;
+            // تصحيح الشات المستهدف: إذا كنت أنا من أرسل لنفسي في الخاص
+            const targetChat = isMe ? (sock.user.id.split(':')[0] + '@s.whatsapp.net') : from;
 
             console.log(`📩 رسالة من (${from}) [fromMe: ${isMe}]: ${body}`);
 
@@ -165,7 +164,7 @@ async function startBot() {
                     const res = await fetch(apiUrl);
                     const json = await res.json();
 
-                    let downloadUrl = json?.data?.url || json?.data?.download || json?.data?.[0]?.url;
+                    let downloadUrl = json?.data?.url || json?.data?.download || (json?.data && json.data[0]?.url);
 
                     if (!json.status || !downloadUrl) {
                         await sock.sendMessage(targetChat, { text: `❌ تعذر تحميل الفيديو من هذا الرابط.` }, { quoted: mek });
@@ -190,4 +189,3 @@ async function startBot() {
 }
 
 startBot();
-                       
