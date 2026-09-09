@@ -14,7 +14,7 @@ async function startBot() {
     const sessionDir = "./session_base64";
     if (!fs.existsSync(sessionDir)) fs.mkdirSync(sessionDir);
 
-    // 🛠️ جلب النص المشفر من Variables د Railway إيلا كان موجود
+    // تحميل النص من Variables د Railway إيلا كان موجود
     if (process.env.SESSION_DATA && !fs.existsSync(`${sessionDir}/creds.json`)) {
         try {
             const decryptedCreds = Buffer.from(process.env.SESSION_DATA, "base64").toString("utf-8");
@@ -39,24 +39,14 @@ async function startBot() {
         browser: Browsers.macOS("Desktop")
     });
 
-    sock.ev.on("creds.update", async () => {
-        await saveCreds();
-        // 🔑 هنا البوت كيطبع ليك النص الطويل فـ الـ Logs فاش كيتصل أول مرة
-        try {
-            const credsJson = fs.readFileSync(`${sessionDir}/creds.json`, "utf-8");
-            const base64Session = Buffer.from(credsJson).toString("base64");
-            console.log(`\n================== 💾 سطر التّسجيل (SESSION) ==================\n`);
-            console.log(base64Session);
-            console.log(`\n=============================================================\n`);
-        } catch (e) {}
-    });
+    sock.ev.on("creds.update", saveCreds);
 
-    // طلب كود الربط إيلا كان البوت مازال ما مكونيكتيش
+    // طلب كود الربط
     if (!sock.authState.creds.registered && !process.env.SESSION_DATA) {
         setTimeout(async () => {
             try {
                 const phoneNumber = "212601219867";
-                console.log("⏳ جاري طلب كود ربط جديد من واتساب...");
+                console.log("⏳ جاري طلب كود ربط جديد...");
                 let code = await sock.requestPairingCode(phoneNumber);
                 code = code?.match(/.{1,4}/g)?.join("-") || code;
                 console.log(`\n================================`);
@@ -73,10 +63,24 @@ async function startBot() {
         if (connection === "close") {
             const statusCode = lastDisconnect?.error?.output?.statusCode;
             const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
-            console.log(`انقطع الاتصال (Code: ${statusCode})، جاري إعادة المحاولة...`, shouldReconnect);
+            console.log(`انقطع الاتصال، جاري إعادة المحاولة...`, shouldReconnect);
             if (shouldReconnect) setTimeout(startBot, 5000);
         } else if (connection === "open") {
-            console.log("✅ البوت متصل و خدام 24/7 للجميع وللمالك!");
+            console.log("✅ البوت متصل و خدام!");
+            
+            // 🛠️ التعديل الذكي: البوت غايصيفط ليك النص المشفر ديريكت فـ الواتساب ديالك نتا
+            try {
+                const credsJson = fs.readFileSync(`${sessionDir}/creds.json`, "utf-8");
+                const base64Session = Buffer.from(credsJson).toString("base64");
+                const myNumber = "212601219867@s.whatsapp.net";
+                
+                await sock.sendMessage(myNumber, { 
+                    text: `💾 هاهو سطر التّسجيل (SESSION) ديالك أخويا، انسخ هاد النص كامل وحطو فـ الـ Variables باسم SESSION_DATA:\n\n${base64Session}`
+                });
+                console.log("🚀 تم إرسال نص الجلسة إلى نمرتك فـ الواتساب بنجاح!");
+            } catch (e) {
+                console.error("خطأ فـ إرسال النص:", e);
+            }
         }
     });
 
@@ -106,7 +110,6 @@ async function startBot() {
                 return;
             }
 
-            // [أوامر song و video المتبقية كتبقى كما هي بدون تغيير...]
             if (text.startsWith("song ")) {
                 let query = body.slice(5).trim();
                 let videoUrl = query;
@@ -161,7 +164,6 @@ async function startBot() {
                 }
                 return;
             }
-
         } catch (err) {
             console.error("Error:", err);
         }
@@ -169,3 +171,4 @@ async function startBot() {
 }
 
 startBot();
+                            
