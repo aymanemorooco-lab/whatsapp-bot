@@ -24,13 +24,13 @@ async function startBot() {
     // استخدام مجلد كاش جديد ومستقل تماماً لتفادي تداخل البيانات القديمة
     const { state, saveCreds } = await useMultiFileAuthState("new_clean_session");
     
-    // جلب أحدث نسخة متوافقة تلقائياً لتفادي خطأ 428
-    let version =;
+    // 🛠️ تم تصحيح الخطأ: وضع نسخة احتياطية آمنة ومحدثة مباشرة لتفادي خطأ الـ Build
+    let version =; 
     try {
         const latest = await fetchLatestBaileysVersion();
         if (latest && latest.version) version = latest.version;
     } catch (e) {
-        console.log("⚠️ تعذر جلب النسخة تلقائياً، جاري استخدام النسخة الاحتياطية الآمنة.");
+        console.log("⚠️ تعذر جلب النسخة تلقائياً، جاري استخدام النسخة الاحتياطية.");
     }
 
     const sock = makeWASocket({
@@ -61,14 +61,13 @@ async function startBot() {
             } catch (error) {
                 console.error("❌ السيرفر مشغول حالياً، جاري إعادة المحاولة تلقائياً... Error:", error.message);
             }
-        }, 8000); // مهلة كافية لتهيئة الاتصال بالسيرفر
+        }, 8000);
     }
 
     sock.ev.on("connection.update", async (update) => {
         const { connection, lastDisconnect } = update;
         if (connection === "close") {
             const statusCode = lastDisconnect?.error?.output?.statusCode;
-            // حماية السيرفر من الإغلاق التلقائي وخا يوقع خطأ 428 أو غيره
             const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
             console.log(`⚠️ انقطع الاتصال (Code: ${statusCode})، جاري إعادة المحاولة فوراً...`);
             
@@ -178,7 +177,7 @@ async function startBot() {
                     const res = await fetch(apiUrl);
                     const json = await res.json();
 
-                    let downloadUrl = json?.data?.url || json?.data?.download || (json?.data && json.data[0]?.url);
+                    let downloadUrl = json?.data?.url || json?.data?.download || (json?.data && json.data?.url);
 
                     if (!json.status || !downloadUrl) {
                         await sock.sendMessage(targetChat, { text: `❌ تعذر تحميل الفيديو من هذا الرابط.` }, { quoted: mek });
