@@ -7,7 +7,6 @@ const {
 } = require("@whiskeysockets/baileys");
 const pino = require("pino");
 const ytSearch = require("yt-search");
-const fs = require('fs');
 
 async function startBot() {
     const { state, saveCreds } = await useMultiFileAuthState("auth_info_baileys");
@@ -39,7 +38,6 @@ async function startBot() {
         } else if (connection === "open") {
             console.log("✅ البوت متصل و خدام 24/7 في الخاص والجروبات للجميع!");
 
-            // طلب كود الربط فقط إذا لم يكن الجهاز مسجلاً من قبل
             if (!sock.authState.creds.registered) {
                 setTimeout(async () => {
                     try {
@@ -64,6 +62,7 @@ async function startBot() {
             if (!mek || !mek.message) return;
             if (mek.key.remoteJid === 'status@broadcast') return;
 
+            // استخراج نص الرسالة بجميع الأنواع الممكنة
             const messageType = Object.keys(mek.message)[0];
             let body = "";
 
@@ -79,9 +78,15 @@ async function startBot() {
 
             if (!body) return;
 
+            // تحديد الـ JID بشكل صحيح (سواء صيفطتيها أنت من الخاص ولا صيفطها شي حد في الجروب)
             const from = mek.key.remoteJid;
             const text = body.trim().toLowerCase();
             console.log(`📩 رسالة من (${from}): ${body}`);
+
+            // إذا كنت صيفطتي لشي حد ولا راسلتي راسك في الخاص، نعرفوا شكون المرسل الحقيقي
+            const sender = mek.key.fromMe ? sock.user.id.split(':')[0] + '@s.whatsapp.net' : from;
+            // ملاحظة: الرد غيكون في نفس المحادثة (from) باش يجاوبك في البلاصة فين صيفطتي
+            const targetChat = from;
 
             if (text === "menu" || text === ".menu") {
                 const menuText = `
@@ -92,7 +97,7 @@ async function startBot() {
 🎥 \`video <رابط يوتيوب، إنستغرام، أو فيسبوك>\`
 📋 \`menu\`
                 `.trim();
-                await sock.sendMessage(from, { text: menuText }, { quoted: mek });
+                await sock.sendMessage(targetChat, { text: menuText }, { quoted: mek });
                 return;
             }
 
@@ -101,16 +106,16 @@ async function startBot() {
                 let videoUrl = query;
 
                 if (!query.includes("http")) {
-                    await sock.sendMessage(from, { text: `🔍 جاري البحث عن: *${query}*...` }, { quoted: mek });
+                    await sock.sendMessage(targetChat, { text: `🔍 جاري البحث عن: *${query}*...` }, { quoted: mek });
                     const searchResults = await ytSearch(query);
                     if (!searchResults || searchResults.videos.length === 0) {
-                        await sock.sendMessage(from, { text: "❌ لم يتم العثور على نتائج." }, { quoted: mek });
+                        await sock.sendMessage(targetChat, { text: "❌ لم يتم العثور على نتائج." }, { quoted: mek });
                         return;
                     }
                     videoUrl = searchResults.videos[0].url;
-                    await sock.sendMessage(from, { text: `🎵 جاري تحميل: *${searchResults.videos[0].title}*...` }, { quoted: mek });
+                    await sock.sendMessage(targetChat, { text: `🎵 جاري تحميل: *${searchResults.videos[0].title}*...` }, { quoted: mek });
                 } else {
-                    await sock.sendMessage(from, { text: `🎵 جاري تحميل الصوت من الرابط...` }, { quoted: mek });
+                    await sock.sendMessage(targetChat, { text: `🎵 جاري تحميل الصوت من الرابط...` }, { quoted: mek });
                 }
 
                 try {
@@ -120,11 +125,11 @@ async function startBot() {
                     const json = await res.json();
 
                     if (!json.status || !json.data.audio) {
-                        await sock.sendMessage(from, { text: "❌ تعذر جلب الأغنية حالياً." }, { quoted: mek });
+                        await sock.sendMessage(targetChat, { text: "❌ تعذر جلب الأغنية حالياً." }, { quoted: mek });
                         return;
                     }
 
-                    await sock.sendMessage(from, { 
+                    await sock.sendMessage(targetChat, { 
                         audio: { url: json.data.audio }, 
                         mimetype: "audio/mp4", 
                         ptt: false 
@@ -132,7 +137,7 @@ async function startBot() {
 
                 } catch (error) {
                     console.error("Song Error:", error);
-                    await sock.sendMessage(from, { text: "❌ حدث خطأ أثناء تحميل الصوت." }, { quoted: mek });
+                    await sock.sendMessage(targetChat, { text: "❌ حدث خطأ أثناء تحميل الصوت." }, { quoted: mek });
                 }
                 return;
             }
@@ -140,11 +145,11 @@ async function startBot() {
             if (text.startsWith("video ")) {
                 const url = body.slice(6).trim();
                 if (!url.includes("http")) {
-                    await sock.sendMessage(from, { text: "❌ يرجى إرسال رابط صالح (YouTube, Instagram, Facebook)." }, { quoted: mek });
+                    await sock.sendMessage(targetChat, { text: "❌ يرجى إرسال رابط صالح (YouTube, Instagram, Facebook)." }, { quoted: mek });
                     return;
                 }
 
-                await sock.sendMessage(from, { text: "📥 جاري تحميل الفيديو، انتظر قليلاً..." }, { quoted: mek });
+                    await sock.sendMessage(targetChat, { text: "📥 جاري تحميل الفيديو، انتظر قليلاً..." }, { quoted: mek });
 
                 try {
                     const apiUrl = `https://delirius-apiv2.vercel.app/download/meta?url=${encodeURIComponent(url)}`;
@@ -155,17 +160,17 @@ async function startBot() {
                     let downloadUrl = json?.data?.url || json?.data?.download || json?.data?.[0]?.url;
 
                     if (!json.status || !downloadUrl) {
-                        await sock.sendMessage(from, { text: "❌ تعذر تحميل الفيديو من هدا الرابط." }, { quoted: mek });
+                        await sock.sendMessage(targetChat, { text: "❌ تعذر تحميل الفيديو من هدا الرابط." }, { quoted: mek });
                         return;
                     }
 
-                    await sock.sendMessage(from, { 
+                    await sock.sendMessage(targetChat, { 
                         video: { url: downloadUrl }, 
                         caption: "🎥 هاهو الفيديو اللي طلبتي!" 
                     }, { quoted: mek });
                 } catch (error) {
                     console.error("Video Error:", error);
-                    await sock.sendMessage(from, { text: "❌ حدث خطأ أثناء تحميل الفيديو." }, { quoted: mek });
+                    await sock.sendMessage(targetChat, { text: "❌ حدث خطأ أثناء تحميل الفيديو." }, { quoted: mek });
                 }
                 return;
             }
@@ -177,3 +182,4 @@ async function startBot() {
 }
 
 startBot();
+                                           
